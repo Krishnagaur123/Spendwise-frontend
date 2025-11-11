@@ -1,5 +1,5 @@
 import React, { Children, useContext } from "react";
-import Menubar from "../components/menubar.jsx";
+import Menubar from "../components/Menubar.jsx";
 import Sidebar from "../components/Sidebar.jsx";
 import { useAppContext } from "../context/AppContext.jsx";
 
