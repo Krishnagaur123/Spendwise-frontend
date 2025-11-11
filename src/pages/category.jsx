@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Dashboard from "../components/Dashboard.jsx";
 import { useUser } from "../hooks/useUser.jsx";
-import axios from "../util/axiosConfig";
+import axios from "../util/axiosConfig.jsx";
 import { Plus, Pencil, FolderOpen } from "lucide-react"; // Trash2 removed
 import { API_ENDPOINTS } from "../util/apiEndpoints.js";
 

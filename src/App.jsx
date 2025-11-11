@@ -4,11 +4,11 @@ import { Toaster } from "react-hot-toast";
 import Home from "./pages/Home.jsx";
 import Income from "./pages/Income.jsx";
 import Expense from "./pages/Expense.jsx";
-import Category from "./pages/category.jsx";
+import Category from "./pages/Category.jsx";
 import Filter from "./pages/Filter.jsx";
 import Login from "./pages/Login.jsx";
 import Signup from "./pages/Signup.jsx";
-import ProtectRoute from "./hooks/protectRoute.jsx";    
+import ProtectRoute from "./hooks/ProtectRoute.jsx";    
 
 
 const App = () => {
