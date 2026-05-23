@@ -1,0 +1,31 @@
+export const BASE_URL = "http://localhost:8080/api/v1.0";
+
+const CLOUDINARY_CLOUD_NAME = "dwdiu3487";
+
+
+export const API_ENDPOINTS = {
+    LOGIN: "/login",
+    REGISTER: "/register",
+    UPLOAD_IMAGE: `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+    GET_USER_INFO: "/profile",
+    GET_ALL_CATEGORIES: "/categories",
+    ADD_CATEGORY: "/categories",
+    UPDATE_CATEGORY: (categoryId) => `/categories/${categoryId}`,
+    GET_ALL_INCOMES: "/incomes",
+    ADD_INCOME: "/incomes",
+    DELETE_INCOME: (incomeId) => `/incomes/${incomeId}`,
+    GET_ALL_EXPENSES: "/expenses",
+    ADD_EXPENSE: "/expenses",
+    DELETE_EXPENSE: (expenseId) => `/expenses/${expenseId}`,
+
+    // Goals
+    GET_ALL_GOALS: "/api/goals",
+    CREATE_GOAL: "/api/goals",
+    UPDATE_GOAL: (id) => `/api/goals/${id}`,
+    DELETE_GOAL: (id) => `/api/goals/${id}`,
+
+    // Reports
+    MONTHLY_REPORT: (year, month) => `/api/reports/monthly/${year}/${month}`,
+    YEARLY_REPORT: (year) => `/api/reports/yearly/${year}`,
+}
+
