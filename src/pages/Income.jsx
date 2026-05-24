@@ -209,26 +209,24 @@ const Income = () => {
     (async () => {
       try {
         setLoading(true);
-        const [incRes, catRes] = await Promise.all([
-          axios.get(API_ENDPOINTS.GET_ALL_INCOMES || "/incomes"),
-          axios.get(API_ENDPOINTS.GET_ALL_CATEGORIES || "/categories"),
+        const [txRes, catRes] = await Promise.all([
+          axios.get(API_ENDPOINTS.GET_ALL_INCOMES),
+          axios.get(API_ENDPOINTS.GET_ALL_CATEGORIES),
         ]);
         if (!alive) return;
 
-        const inc = Array.isArray(incRes.data)
-          ? incRes.data
-          : incRes.data?.items || [];
-        const catsRaw = Array.isArray(catRes.data)
-          ? catRes.data
-          : catRes.data?.items || [];
-        const incomeCats = catsRaw.filter(
-          (c) => (c.type || c.categoryType) === "INCOME"
-        );
+        // Backend returns { transactions: [...] } for unified endpoint
+        const allTx = txRes.data?.transactions ?? (Array.isArray(txRes.data) ? txRes.data : []);
+        const inc = allTx.filter((t) => t.type === "INCOME");
+
+        // Categories response: { categories: [...] } with { name, type, custom }
+        const catsRaw = catRes.data?.categories ?? (Array.isArray(catRes.data) ? catRes.data : []);
+        const incomeCats = catsRaw.filter((c) => c.type === "INCOME");
 
         setIncomes(inc);
         setCategories(incomeCats);
         if (incomeCats.length)
-          setCategoryId((prev) => prev || String(incomeCats[0].id));
+          setCategoryId((prev) => prev || incomeCats[0].name);
       } catch {
         if (alive) setError("Failed to load incomes or categories");
       } finally {
@@ -250,70 +248,51 @@ const Income = () => {
   const onAdd = async (e) => {
     e.preventDefault();
     const amt = Number(amount);
-    if (Number.isNaN(amt) || amt < 0) {
-      setError("Amount must be 0 or greater");
+    if (Number.isNaN(amt) || amt <= 0) {
+      setError("Amount must be positive");
       return;
     }
     try {
-      const payload = { amount: amt, date, categoryId, icon }; // source removed
-      const { data } = await axios.post(
-        API_ENDPOINTS.CREATE_INCOME || "/incomes",
-        payload
-      );
+      // Backend expects: { amount, date, category (name string), description }
+      const payload = { amount: amt, date, category: categoryId, description: icon || categoryId };
+      const { data } = await axios.post(API_ENDPOINTS.ADD_INCOME, payload);
       setIncomes((prev) => [data, ...prev]);
       setAdding(false);
-      // reset
       setAmount("");
       setDate(new Date().toISOString().slice(0, 10));
       setIcon("");
       setError("");
-      if (categories.length) setCategoryId(String(categories[0].id));
+      if (categories.length) setCategoryId(categories[0].name);
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to add income");
+      setError(err?.response?.data?.message || err?.response?.data?.errors?.amount || "Failed to add income");
     }
   };
   const handleDownloadIncome = () => {
-    const rows = thisMonthIncomes.map((i) => {
-      const catName =
-        i.category?.name ||
-        categories.find(
-          (c) => String(c.id) === String(i.categoryId || i.category?.id)
-        )?.name ||
-        "Income";
-      return {
-        Date: formatIso(i.date),
-        Category: catName,
-        Amount: formatInr(Number(i.amount ?? 0)),
-        Id: i.id,
-      };
-    });
+    // category is now a plain string in the response
+    const rows = thisMonthIncomes.map((i) => ({
+      Date: formatIso(i.date),
+      Category: i.category ?? "Income",
+      Description: i.description ?? "",
+      Amount: formatInr(Number(i.amount ?? 0)),
+      Id: i.id,
+    }));
     if (rows.length === 0) {
       alert("No income entries this month to download.");
       return;
     }
-    const ym = new Date().toISOString().slice(0, 7); // yyyy-mm
-    exportToExcel(rows, `income_${ym}`);
+    exportToExcel(rows, `income_${new Date().toISOString().slice(0, 7)}`);
   };
 
   const onDelete = async (inc) => {
-    const catName =
-      inc.category?.name ||
-      categories.find(
-        (c) => String(c.id) === String(inc.categoryId || inc.category?.id)
-      )?.name ||
-      "Income";
+    const catName = inc.category ?? "Income";
     if (!confirm(`Delete ${catName} entry?`)) return;
     try {
-      const url = API_ENDPOINTS.DELETE_INCOME?.(inc.id) || `/incomes/${inc.id}`;
-      await axios.delete(url);
+      await axios.delete(API_ENDPOINTS.DELETE_INCOME(inc.id));
       setIncomes((prev) => prev.filter((i) => i.id !== inc.id));
     } catch (e) {
-      const status = e?.response?.status;
       const msg =
         e?.response?.data?.message ||
-        (status === 401 || status === 403
-          ? "Not authorized to delete income"
-          : "Failed to delete income");
+        (e?.response?.status === 404 ? "Income not found" : "Failed to delete income");
       setError(msg);
     }
   };
@@ -371,13 +350,8 @@ const Income = () => {
                 const dateStr = i.date
                   ? new Date(i.date).toLocaleDateString()
                   : "";
-                const catName =
-                  i.category?.name ||
-                  categories.find(
-                    (c) =>
-                      String(c.id) === String(i.categoryId || i.category?.id)
-                  )?.name ||
-                  "Income";
+                // category is now a plain string in the API response
+                const catName = i.category ?? "Income";
                 return (
                   <div
                     key={i.id}
@@ -478,8 +452,9 @@ const Income = () => {
                     {!categories.length && (
                       <option value="">No income categories</option>
                     )}
+                    {/* categories keyed by name now — no id field */}
                     {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
+                      <option key={c.name} value={c.name}>
                         {c.name}
                       </option>
                     ))}

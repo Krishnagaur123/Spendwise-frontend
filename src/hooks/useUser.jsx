@@ -6,7 +6,8 @@ import { API_ENDPOINTS } from "../util/apiEndpoints.js";
 
 /**
  * Fetches the authenticated user's profile on mount and populates AppContext.
- * On 401 (token missing or expired), clears state and redirects to login.
+ * Uses session-based auth (JSESSIONID cookie sent automatically via withCredentials).
+ * On 401, clears state and redirects to /login.
  * Uses an `isMounted` flag to prevent state updates after unmount.
  */
 export const useUser = () => {
@@ -17,14 +18,12 @@ export const useUser = () => {
     let isMounted = true;
 
     const fetchUserInfo = async () => {
-      const token = localStorage.getItem("token");
-      if (!token) {
-        if (isMounted) setUser?.(null);
-        return;
-      }
+      // Don't attempt profile fetch on auth pages — avoids redirect loops
+      if (["/login", "/signup"].includes(window.location.pathname)) return;
 
       try {
-        // axiosConfig attaches the Authorization header via request interceptor
+        // JWT Bearer is sent automatically by axiosConfig request interceptor.
+        // JSESSIONID cookie is also sent via withCredentials for session-based clients.
         const { data } = await axiosConfig.get(API_ENDPOINTS.GET_USER_INFO);
         if (isMounted) {
           setUser?.(data?.user || data || null);
@@ -32,7 +31,7 @@ export const useUser = () => {
       } catch (error) {
         console.log("Failed to fetch user info", error);
         if (isMounted) {
-          clearUser();
+          clearUser?.();
           navigate("/login");
         }
       }

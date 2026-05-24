@@ -170,21 +170,17 @@ const Home = () => {
     (async () => {
       try {
         setLoading(true);
-        const [incRes, expRes, catRes] = await Promise.all([
-          axios.get(API_ENDPOINTS.GET_ALL_INCOMES || "/incomes"),
-          axios.get(API_ENDPOINTS.GET_ALL_EXPENSES || "/expenses"),
+        const [txRes, catRes] = await Promise.all([
+          axios.get(API_ENDPOINTS.GET_ALL_TRANSACTIONS || "/transactions"),
           axios.get(API_ENDPOINTS.GET_ALL_CATEGORIES || "/categories"),
         ]);
         if (!alive) return;
-        setIncomes(
-          Array.isArray(incRes.data) ? incRes.data : incRes.data?.items || []
-        );
-        setExpenses(
-          Array.isArray(expRes.data) ? expRes.data : expRes.data?.items || []
-        );
-        setCategories(
-          Array.isArray(catRes.data) ? catRes.data : catRes.data?.items || []
-        );
+        // Unified transactions endpoint returns { transactions: [...] }
+        const all = txRes.data?.transactions ?? (Array.isArray(txRes.data) ? txRes.data : []);
+        setIncomes(all.filter((t) => t.type === "INCOME"));
+        setExpenses(all.filter((t) => t.type === "EXPENSE"));
+        const catsRaw = catRes.data?.categories ?? (Array.isArray(catRes.data) ? catRes.data : []);
+        setCategories(catsRaw);
       } finally {
         if (alive) setLoading(false);
       }
@@ -193,6 +189,7 @@ const Home = () => {
       alive = false;
     };
   }, []);
+
 
   const monthIncome = useMemo(
     () =>
@@ -226,12 +223,8 @@ const Home = () => {
         kind: "INCOME",
         date: i.date,
         amount: Number(i.amount || 0),
-        categoryName:
-          i.category?.name ||
-          categories.find(
-            (c) => String(c.id) === String(i.categoryId || i.category?.id)
-          )?.name ||
-          "Income",
+        // category is now a plain string in the response
+        categoryName: i.category ?? "Income",
         icon: i.icon || "💰",
       })),
       ...expenses.map((e) => ({
@@ -239,17 +232,13 @@ const Home = () => {
         kind: "EXPENSE",
         date: e.date,
         amount: Number(e.amount || 0),
-        categoryName:
-          e.category?.name ||
-          categories.find(
-            (c) => String(c.id) === String(e.categoryId || e.category?.id)
-          )?.name ||
-          "Expense",
+        categoryName: e.category ?? "Expense",
         icon: e.icon || "🧾",
       })),
     ].sort((a, b) => new Date(b.date) - new Date(a.date));
-    return rows.slice(0, 5); // recent 5
-  }, [incomes, expenses, categories]);
+    return rows.slice(0, 5);
+  }, [incomes, expenses]);
+
 
   // Donut data
   const balance = Math.max(0, net);

@@ -205,26 +205,23 @@ const Expense = () => {
     (async () => {
       try {
         setLoading(true);
-        const [expRes, catRes] = await Promise.all([
-          axios.get(API_ENDPOINTS.GET_ALL_EXPENSES || "/expenses"),
-          axios.get(API_ENDPOINTS.GET_ALL_CATEGORIES || "/categories"),
+        const [txRes, catRes] = await Promise.all([
+          axios.get(API_ENDPOINTS.GET_ALL_EXPENSES),
+          axios.get(API_ENDPOINTS.GET_ALL_CATEGORIES),
         ]);
         if (!alive) return;
 
-        const exp = Array.isArray(expRes.data)
-          ? expRes.data
-          : expRes.data?.items || [];
-        const catsRaw = Array.isArray(catRes.data)
-          ? catRes.data
-          : catRes.data?.items || [];
-        const expenseCats = catsRaw.filter(
-          (c) => (c.type || c.categoryType) === "EXPENSE"
-        );
+        // Backend returns { transactions: [...] } for unified endpoint
+        const allTx = txRes.data?.transactions ?? (Array.isArray(txRes.data) ? txRes.data : []);
+        const exp = allTx.filter((t) => t.type === "EXPENSE");
+
+        const catsRaw = catRes.data?.categories ?? (Array.isArray(catRes.data) ? catRes.data : []);
+        const expenseCats = catsRaw.filter((c) => c.type === "EXPENSE");
 
         setExpenses(exp);
         setCategories(expenseCats);
         if (expenseCats.length)
-          setCategoryId((prev) => prev || String(expenseCats[0].id));
+          setCategoryId((prev) => prev || expenseCats[0].name);
       } catch {
         if (alive) setError("Failed to load expenses or categories");
       } finally {
@@ -244,20 +241,13 @@ const Expense = () => {
   }, [expenses]);
 
   const handleDownloadExpense = () => {
-    const rows = thisMonthExpenses.map((e) => {
-      const catName =
-        e.category?.name ||
-        categories.find(
-          (c) => String(c.id) === String(e.categoryId || e.category?.id)
-        )?.name ||
-        "Expense";
-      return {
-        Date: formatIso(e.date),
-        Category: catName,
-        Amount: formatInr(Number(e.amount ?? 0)),
-        Id: e.id,
-      };
-    });
+    const rows = thisMonthExpenses.map((e) => ({
+      Date: formatIso(e.date),
+      Category: e.category ?? "Expense",
+      Description: e.description ?? "",
+      Amount: formatInr(Number(e.amount ?? 0)),
+      Id: e.id,
+    }));
     if (rows.length === 0) {
       alert("No expense entries this month to download.");
       return;
@@ -268,49 +258,36 @@ const Expense = () => {
   const onAdd = async (e) => {
     e.preventDefault();
     const amt = Number(amount);
-    if (Number.isNaN(amt) || amt < 0) {
-      setError("Amount must be 0 or greater");
+    if (Number.isNaN(amt) || amt <= 0) {
+      setError("Amount must be positive");
       return;
     }
     try {
-      const payload = { amount: amt, date, categoryId, icon };
-      const { data } = await axios.post(
-        API_ENDPOINTS.ADD_EXPENSE || "/expenses",
-        payload
-      );
+      // Backend expects: { amount, date, category (name string), description }
+      const payload = { amount: amt, date, category: categoryId, description: icon || categoryId };
+      const { data } = await axios.post(API_ENDPOINTS.ADD_EXPENSE, payload);
       setExpenses((prev) => [data, ...prev]);
       setAdding(false);
-      // reset
       setAmount("");
       setDate(new Date().toISOString().slice(0, 10));
       setIcon("");
       setError("");
-      if (categories.length) setCategoryId(String(categories[0].id));
+      if (categories.length) setCategoryId(categories[0].name);
     } catch (err) {
-      setError(err?.response?.data?.message || "Failed to add expense");
+      setError(err?.response?.data?.message || err?.response?.data?.errors?.amount || "Failed to add expense");
     }
   };
 
   const onDelete = async (exp) => {
-    const catName =
-      exp.category?.name ||
-      categories.find(
-        (c) => String(c.id) === String(exp.categoryId || exp.category?.id)
-      )?.name ||
-      "Expense";
+    const catName = exp.category ?? "Expense";
     if (!confirm(`Delete ${catName} entry?`)) return;
     try {
-      const url =
-        API_ENDPOINTS.DELETE_EXPENSE?.(exp.id) || `/expenses/${exp.id}`;
-      await axios.delete(url);
+      await axios.delete(API_ENDPOINTS.DELETE_EXPENSE(exp.id));
       setExpenses((prev) => prev.filter((e) => e.id !== exp.id));
     } catch (e) {
-      const status = e?.response?.status;
       const msg =
         e?.response?.data?.message ||
-        (status === 401 || status === 403
-          ? "Not authorized to delete expense"
-          : "Failed to delete expense");
+        (e?.response?.status === 404 ? "Expense not found" : "Failed to delete expense");
       setError(msg);
     }
   };
@@ -385,13 +362,8 @@ const Expense = () => {
                 const dateStr = e.date
                   ? new Date(e.date).toLocaleDateString()
                   : "";
-                const catName =
-                  e.category?.name ||
-                  categories.find(
-                    (c) =>
-                      String(c.id) === String(e.categoryId || e.category?.id)
-                  )?.name ||
-                  "Expense";
+                // category is now a plain string in the API response
+                const catName = e.category ?? "Expense";
                 return (
                   <div
                     key={e.id}
@@ -492,8 +464,9 @@ const Expense = () => {
                     {!categories.length && (
                       <option value="">No expense categories</option>
                     )}
+                    {/* categories keyed by name now — no id field */}
                     {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
+                      <option key={c.name} value={c.name}>
                         {c.name}
                       </option>
                     ))}

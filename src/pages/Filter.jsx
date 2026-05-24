@@ -53,16 +53,17 @@ const Filters = () => {
     (async () => {
       try {
         setLoading(true);
-        const [incRes, expRes, catRes] = await Promise.all([
-          axios.get(API_ENDPOINTS.GET_ALL_INCOMES || "/incomes"),
-          axios.get(API_ENDPOINTS.GET_ALL_EXPENSES || "/expenses"),
+        const [txRes, catRes] = await Promise.all([
+          axios.get(API_ENDPOINTS.GET_ALL_TRANSACTIONS || "/transactions"),
           axios.get(API_ENDPOINTS.GET_ALL_CATEGORIES || "/categories"),
         ]);
         if (!alive) return;
 
-        setIncomes(Array.isArray(incRes.data) ? incRes.data : incRes.data?.items || []);
-        setExpenses(Array.isArray(expRes.data) ? expRes.data : expRes.data?.items || []);
-        setCategories(Array.isArray(catRes.data) ? catRes.data : catRes.data?.items || []);
+        const all = txRes.data?.transactions ?? (Array.isArray(txRes.data) ? txRes.data : []);
+        setIncomes(all.filter((t) => t.type === "INCOME"));
+        setExpenses(all.filter((t) => t.type === "EXPENSE"));
+        const catsRaw = catRes.data?.categories ?? (Array.isArray(catRes.data) ? catRes.data : []);
+        setCategories(catsRaw);
       } finally {
         if (alive) setLoading(false);
       }
@@ -70,18 +71,19 @@ const Filters = () => {
     return () => { alive = false; };
   }, []);
 
+  // Category map by name (since new API has no numeric id)
   const categoryMap = useMemo(() => {
     const m = new Map();
-    categories.forEach(c => m.set(String(c.id), c));
+    categories.forEach(c => m.set(c.name, c));
     return m;
   }, [categories]);
 
   const expenseCats = useMemo(
-    () => categories.filter(c => (c.type || c.categoryType) === "EXPENSE"),
+    () => categories.filter(c => c.type === "EXPENSE"),
     [categories]
   );
   const incomeCats = useMemo(
-    () => categories.filter(c => (c.type || c.categoryType) === "INCOME"),
+    () => categories.filter(c => c.type === "INCOME"),
     [categories]
   );
   const shownCats = useMemo(() => {
@@ -90,7 +92,7 @@ const Filters = () => {
     return categories;
   }, [type, categories, incomeCats, expenseCats]);
 
-  // combined filtered rows
+  // combined filtered rows — category is now a plain string per transaction
   const combined = useMemo(() => {
     const rows = [];
     if (type === "INCOME" || type === "BOTH") {
@@ -99,8 +101,7 @@ const Filters = () => {
         kind: "INCOME",
         date: i.date,
         amount: Number(i.amount || 0),
-        categoryId: String(i.categoryId || i.category?.id || ""),
-        categoryName: i.category?.name || categoryMap.get(String(i.categoryId || i.category?.id))?.name || "Income",
+        categoryName: i.category ?? "Income",
         icon: i.icon || "💰",
       }));
     }
@@ -110,19 +111,19 @@ const Filters = () => {
         kind: "EXPENSE",
         date: e.date,
         amount: Number(e.amount || 0),
-        categoryId: String(e.categoryId || e.category?.id || ""),
-        categoryName: e.category?.name || categoryMap.get(String(e.categoryId || e.category?.id))?.name || "Expense",
+        categoryName: e.category ?? "Expense",
         icon: e.icon || "🧾",
       }));
     }
 
     return rows
       .filter(r => within(String(r.date).slice(0,10), from, to))
-      .filter(r => selectedCats.length === 0 || selectedCats.includes(String(r.categoryId)))
+      // filter by selected category names (not ids)
+      .filter(r => selectedCats.length === 0 || selectedCats.includes(r.categoryName))
       .filter(r => (minAmt === "" || r.amount >= Number(minAmt)) && (maxAmt === "" || r.amount <= Number(maxAmt)))
       .filter(r => !q || r.categoryName.toLowerCase().includes(q.toLowerCase()))
       .sort((a, b) => new Date(a.date) - new Date(b.date));
-  }, [type, incomes, expenses, categoryMap, from, to, selectedCats, minAmt, maxAmt, q]);
+  }, [type, incomes, expenses, from, to, selectedCats, minAmt, maxAmt, q]);
 
   const summary = useMemo(() => {
     const inc = combined.filter(r => r.kind === "INCOME").reduce((s,r) => s + r.amount, 0);
@@ -132,7 +133,7 @@ const Filters = () => {
 
   // Preserve "All" feel on type change if user had all categories selected previously
   useEffect(() => {
-    const allForType = (type === "INCOME" ? incomeCats : type === "EXPENSE" ? expenseCats : categories).map(c => String(c.id));
+    const allForType = (type === "INCOME" ? incomeCats : type === "EXPENSE" ? expenseCats : categories).map(c => c.name);
     const hadAll = selectedCats.length && selectedCats.length === categories.length;
     if (hadAll) setSelectedCats(allForType);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -259,7 +260,7 @@ const Filters = () => {
                   const val = e.target.value;
                   if (val === "__all__") {
                     const allForType = (type === "INCOME" ? incomeCats : type === "EXPENSE" ? expenseCats : categories)
-                      .map(c => String(c.id));
+                      .map(c => c.name); // keyed by name now
                     setSelectedCats(allForType);
                   } else if (val !== "__picker__") {
                     const next = new Set(selectedCats);
@@ -272,7 +273,7 @@ const Filters = () => {
                 <option value="__picker__" disabled>Select categories…</option>
                 <option value="__all__">All</option>
                 {shownCats.map(c => (
-                  <option key={c.id} value={String(c.id)}>{c.name}</option>
+                  <option key={c.name} value={c.name}>{c.name}</option>
                 ))}
               </select>
               <button
@@ -287,21 +288,18 @@ const Filters = () => {
 
             {showChips && selectedCats.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-2">
-                {selectedCats.map(id => {
-                  const name = categoryMap.get(String(id))?.name || id;
-                  return (
-                    <span key={id} className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-1 text-xs text-indigo-700 ring-1 ring-inset ring-indigo-200">
-                      {name}
-                      <button
-                        className="rounded-full p-0.5 hover:bg-indigo-100"
-                        onClick={() => setSelectedCats(selectedCats.filter(x => x !== id))}
-                        title="Remove"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  );
-                })}
+                {selectedCats.map(name => (
+                  <span key={name} className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-1 text-xs text-indigo-700 ring-1 ring-inset ring-indigo-200">
+                    {name}
+                    <button
+                      className="rounded-full p-0.5 hover:bg-indigo-100"
+                      onClick={() => setSelectedCats(selectedCats.filter(x => x !== name))}
+                      title="Remove"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
               </div>
             )}
           </div>

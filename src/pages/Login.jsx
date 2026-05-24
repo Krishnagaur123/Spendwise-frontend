@@ -29,14 +29,14 @@ const Login = () => {
         email,
         password,
       });
-      const { token, user } = response.data || {};
-
-      if (token) {
-        localStorage.setItem("token", token);
+      // Session-based auth: backend sets JSESSIONID cookie, no token in body
+      if (response.status === 200) {
+        const { token, user } = response.data || {};
+        if (token) localStorage.setItem("token", token); // keep for legacy compatibility
         setUser(user || null);
         navigate("/dashboard");
       } else {
-        toast.error("Invalid credentials or missing token.");
+        toast.error("Login failed. Please check your credentials.");
       }
     } catch (error) {
       console.error("Login failed:", error);
@@ -48,6 +48,7 @@ const Login = () => {
     } finally {
       setLoading(false);
     }
+
 
   };
 
