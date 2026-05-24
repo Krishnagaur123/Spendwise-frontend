@@ -1,15 +1,26 @@
 import axios from "axios";
-import { BASE_URL } from "./apiEndpoints"; 
+import { BASE_URL } from "./apiEndpoints";
 
+/**
+ * Pre-configured Axios instance for all API calls.
+ *
+ * Request interceptor: attaches `Authorization: Bearer <token>` from localStorage
+ * on every request except auth endpoints (login, register, etc.).
+ *
+ * Response interceptor:
+ *  - 401 → clears token and hard-redirects to /login
+ *  - 403 / 5xx → logs error (UI-level toast handling done per-component)
+ */
 const axiosConfig = axios.create({
   baseURL: BASE_URL,
-  withCredentials: true,
+  withCredentials: true, // required for session cookie (JSESSIONID) support
   headers: {
     "Content-Type": "application/json",
     Accept: "application/json",
   },
 });
 
+// Endpoints that should NOT receive an Authorization header
 const excludeEndpoints = ["/login", "/register", "/status", "/activate", "/health", "/auth/login", "/auth/register"];
 
 axiosConfig.interceptors.request.use(
@@ -24,7 +35,6 @@ axiosConfig.interceptors.request.use(
         config.headers.Authorization = `Bearer ${accessToken}`;
       }
     }
-
     return config;
   },
   (error) => Promise.reject(error)
@@ -41,6 +51,7 @@ axiosConfig.interceptors.response.use(
     const { status } = error.response;
 
     if (status === 401) {
+      // Token expired or invalid — force re-login
       localStorage.removeItem("token");
       window.location.href = "/login";
     } else if (status === 403) {

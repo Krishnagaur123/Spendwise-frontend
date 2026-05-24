@@ -1,14 +1,17 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import axiosConfig from "../util/axiosConfig"; // your configured axios instance
+import axiosConfig from "../util/axiosConfig";
 import { useAppContext } from "../context/AppContext.jsx";
 import { API_ENDPOINTS } from "../util/apiEndpoints.js";
 
+/**
+ * Fetches the authenticated user's profile on mount and populates AppContext.
+ * On 401 (token missing or expired), clears state and redirects to login.
+ * Uses an `isMounted` flag to prevent state updates after unmount.
+ */
 export const useUser = () => {
   const navigate = useNavigate();
-  const { user, setUser ,clearUser} = useAppContext();
-
-
+  const { user, setUser, clearUser } = useAppContext();
 
   useEffect(() => {
     let isMounted = true;
@@ -21,15 +24,13 @@ export const useUser = () => {
       }
 
       try {
-        
-        // axiosConfig should already attach Authorization header via interceptor
-        const { data } = await axiosConfig.get(API_ENDPOINTS.GET_USER_INFO); // adjust endpoint
+        // axiosConfig attaches the Authorization header via request interceptor
+        const { data } = await axiosConfig.get(API_ENDPOINTS.GET_USER_INFO);
         if (isMounted) {
-          const u = data?.user || data || null;
-          setUser?.(u);
+          setUser?.(data?.user || data || null);
         }
       } catch (error) {
-        console.log("Failed to fetch the user info", error);
+        console.log("Failed to fetch user info", error);
         if (isMounted) {
           clearUser();
           navigate("/login");
@@ -38,10 +39,7 @@ export const useUser = () => {
     };
 
     fetchUserInfo();
-
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, [setUser, navigate]);
 
   return { user, setUser, clearUser };

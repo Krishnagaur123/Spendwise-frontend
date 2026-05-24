@@ -8,10 +8,9 @@ import Category from "./pages/Category.jsx";
 import Filter from "./pages/Filter.jsx";
 import Login from "./pages/Login.jsx";
 import Signup from "./pages/Signup.jsx";
-import ProtectRoute from "./hooks/ProtectRoute.jsx";    
+import ProtectRoute from "./hooks/ProtectRoute.jsx";
 import Goals from "./pages/Goals.jsx";
 import Reports from "./pages/Reports.jsx";
-
 
 const App = () => {
   return (
@@ -19,7 +18,10 @@ const App = () => {
       <Toaster />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Root/>} />
+          {/* Root redirects based on auth state */}
+          <Route path="/" element={<Root />} />
+
+          {/* Protected routes — require a valid token in localStorage */}
           <Route path="/dashboard" element={<ProtectRoute><Home /></ProtectRoute>} />
           <Route path="/income" element={<ProtectRoute><Income /></ProtectRoute>} />
           <Route path="/expense" element={<ProtectRoute><Expense /></ProtectRoute>} />
@@ -27,6 +29,8 @@ const App = () => {
           <Route path="/filter" element={<ProtectRoute><Filter /></ProtectRoute>} />
           <Route path="/goals" element={<ProtectRoute><Goals /></ProtectRoute>} />
           <Route path="/reports" element={<ProtectRoute><Reports /></ProtectRoute>} />
+
+          {/* Public routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
         </Routes>
@@ -35,11 +39,10 @@ const App = () => {
   );
 };
 
-
+/** Redirects authenticated users to the dashboard, unauthenticated to login. */
 const Root = () => {
   const token = localStorage.getItem("token");
   return token ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />;
 };
-
 
 export default App;
